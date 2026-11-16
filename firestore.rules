@@ -1,0 +1,194 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ---------------------------------------------------------
+    // Global Hardened Helpers
+    // ---------------------------------------------------------
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'jaikladigital@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // ---------------------------------------------------------
+    // Entity Validation Blueprints
+    // ---------------------------------------------------------
+    function isValidKioskConfig(data) {
+      return data.keys().hasAll([
+        'ownerUid', 'kioskName', 'kioskMode', 'brandName',
+        'primaryColor', 'secondaryColor', 'shotsCount', 'orientation',
+        'printLayout', 'printFrameLayer', 'showHandSkeleton',
+        'idleResetSeconds', 'enableHardwarePrint', 'createdAt', 'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'ownerUid', 'kioskName', 'kioskMode', 'brandName',
+        'primaryColor', 'secondaryColor', 'shotsCount', 'orientation',
+        'printLayout', 'printFrameLayer', 'framesUrls', 'sponsorsUrls',
+        'showHandSkeleton', 'idleResetSeconds', 'enableHardwarePrint',
+        'photoPrintBackgroundColor', 'shareScreenBackgroundColor',
+        'photoPreviewContainerColor', 'shareScreenBackgroundUrl',
+        'sponsorLogoUrl', 'showSponsorLogo', 'customStartButtonUrl',
+        'createdAt', 'updatedAt'
+      ])
+      && isValidId(data.ownerUid)
+      && data.ownerUid == request.auth.uid
+      && data.kioskName is string && data.kioskName.size() >= 1 && data.kioskName.size() <= 80
+      && data.kioskMode in ['GAME_AND_PHOTO', 'PHOTO_ONLY']
+      && data.brandName is string && data.brandName.size() >= 1 && data.brandName.size() <= 80
+      && data.primaryColor is string && data.primaryColor.size() >= 4 && data.primaryColor.size() <= 20
+      && data.secondaryColor is string && data.secondaryColor.size() >= 4 && data.secondaryColor.size() <= 20
+      && data.shotsCount is number && data.shotsCount >= 1 && data.shotsCount <= 6
+      && data.orientation in ['PORTRAIT', 'LANDSCAPE']
+      && data.printLayout is string && data.printLayout.size() >= 1 && data.printLayout.size() <= 40
+      && data.printFrameLayer in ['FRONT', 'BACK']
+      && data.showHandSkeleton is bool
+      && data.idleResetSeconds is number && data.idleResetSeconds >= 10 && data.idleResetSeconds <= 600
+      && data.enableHardwarePrint is bool
+      && (!('framesUrls' in data) || (data.framesUrls is list && data.framesUrls.size() <= 10 && (data.framesUrls.size() == 0 || (data.framesUrls[0] is string && data.framesUrls[0].size() <= 500))))
+      && (!('sponsorsUrls' in data) || (data.sponsorsUrls is list && data.sponsorsUrls.size() <= 10 && (data.sponsorsUrls.size() == 0 || (data.sponsorsUrls[0] is string && data.sponsorsUrls[0].size() <= 500))))
+      && (!('photoPrintBackgroundColor' in data) || (data.photoPrintBackgroundColor is string && data.photoPrintBackgroundColor.size() <= 20))
+      && (!('shareScreenBackgroundColor' in data) || (data.shareScreenBackgroundColor is string && data.shareScreenBackgroundColor.size() <= 20))
+      && (!('photoPreviewContainerColor' in data) || (data.photoPreviewContainerColor is string && data.photoPreviewContainerColor.size() <= 20))
+      && (!('shareScreenBackgroundUrl' in data) || (data.shareScreenBackgroundUrl is string && data.shareScreenBackgroundUrl.size() <= 500))
+      && (!('sponsorLogoUrl' in data) || (data.sponsorLogoUrl is string && data.sponsorLogoUrl.size() <= 500))
+      && (!('showSponsorLogo' in data) || data.showSponsorLogo is bool)
+      && (!('customStartButtonUrl' in data) || (data.customStartButtonUrl is string && data.customStartButtonUrl.size() <= 500))
+      && data.createdAt is timestamp
+      && data.updatedAt is timestamp;
+    }
+
+    function isValidLeaderboardScore(data, kioskId) {
+      return data.keys().hasAll(['kioskId', 'ownerUid', 'playerName', 'score', 'level', 'createdAt'])
+      && data.keys().hasOnly(['kioskId', 'ownerUid', 'playerName', 'score', 'level', 'createdAt'])
+      && isValidId(data.kioskId)
+      && data.kioskId == kioskId
+      && isValidId(data.ownerUid)
+      && data.ownerUid == request.auth.uid
+      && data.playerName is string && data.playerName.size() >= 1 && data.playerName.size() <= 20
+      && data.score is number && data.score >= 0 && data.score <= 1000000
+      && data.level is number && data.level >= 1 && data.level <= 1000
+      && data.createdAt is timestamp;
+    }
+
+    function isValidSharedPhoto(data) {
+      return data.keys().hasAll(['ownerUid', 'kioskId', 'imageUrl', 'provider', 'brandName', 'createdAt'])
+      && data.keys().hasOnly(['ownerUid', 'kioskId', 'imageUrl', 'provider', 'brandName', 'createdAt'])
+      && isValidId(data.ownerUid)
+      && data.ownerUid == request.auth.uid
+      && isValidId(data.kioskId)
+      && data.imageUrl is string && data.imageUrl.size() >= 10 && data.imageUrl.size() <= 800000
+      && data.provider in ['imgbb', 'backup_key', 'freeimage', 'cloud_fallback']
+      && data.brandName is string && data.brandName.size() >= 1 && data.brandName.size() <= 80
+      && data.createdAt is timestamp;
+    }
+
+    // ---------------------------------------------------------
+    // Collections
+    // ---------------------------------------------------------
+    match /admins/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && request.auth.uid == uid;
+      allow list, create, update, delete: if false;
+    }
+
+    match /kiosk_configs/{kioskId} {
+      // Exact document lookup allowed for synced kiosk display (contains zero PII/secrets)
+      allow get: if isValidId(kioskId);
+      // List strictly scoped to owner or admin
+      allow list: if isSignedIn() && (isAdmin() || existing().ownerUid == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && isValidId(kioskId)
+        && isValidKioskConfig(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isSignedIn()
+        && isValidId(kioskId)
+        && isValidKioskConfig(incoming())
+        && (isAdmin() || existing().ownerUid == request.auth.uid)
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'kioskName', 'kioskMode', 'brandName', 'primaryColor', 'secondaryColor',
+            'shotsCount', 'orientation', 'printLayout', 'printFrameLayer',
+            'framesUrls', 'sponsorsUrls', 'showHandSkeleton', 'idleResetSeconds',
+            'enableHardwarePrint', 'photoPrintBackgroundColor',
+            'shareScreenBackgroundColor', 'photoPreviewContainerColor',
+            'shareScreenBackgroundUrl', 'sponsorLogoUrl', 'showSponsorLogo',
+            'customStartButtonUrl', 'updatedAt'
+          ])
+        );
+
+      allow delete: if isSignedIn() && isValidId(kioskId) && (isAdmin() || existing().ownerUid == request.auth.uid);
+
+      // Subcollection: Scores (Master Gate checks parent kiosk_configs owner)
+      match /scores/{scoreId} {
+        allow get: if isValidId(kioskId) && isValidId(scoreId);
+        allow list: if isSignedIn() && (isAdmin() || existing().ownerUid == request.auth.uid);
+
+        allow create: if isSignedIn()
+          && isValidId(kioskId)
+          && isValidId(scoreId)
+          && isValidLeaderboardScore(incoming(), kioskId)
+          && incoming().createdAt == request.time
+          && exists(/databases/$(database)/documents/kiosk_configs/$(kioskId))
+          && (
+            isAdmin() ||
+            get(/databases/$(database)/documents/kiosk_configs/$(kioskId)).data.ownerUid == request.auth.uid
+          );
+
+        allow update: if false;
+
+        allow delete: if isSignedIn()
+          && isValidId(kioskId)
+          && isValidId(scoreId)
+          && (isAdmin() || existing().ownerUid == request.auth.uid);
+      }
+    }
+
+    match /shared_photos/{photoId} {
+      // QR code mobile viewers can fetch exact shared photo by valid photoId (no PII stored)
+      allow get: if isValidId(photoId);
+      // List strictly scoped to owner or admin
+      allow list: if isSignedIn() && (isAdmin() || existing().ownerUid == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && isValidId(photoId)
+        && isValidSharedPhoto(incoming())
+        && incoming().createdAt == request.time;
+
+      allow update: if false;
+
+      allow delete: if isSignedIn()
+        && isValidId(photoId)
+        && (isAdmin() || existing().ownerUid == request.auth.uid);
+    }
+  }
+}

@@ -1,0 +1,223 @@
+{
+  "entities": {
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized system administrator marker",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "createdAt"]
+    },
+    "KioskConfig": {
+      "title": "KioskConfig",
+      "description": "Public visual and operational configuration for a kiosk profile (no secrets or PII)",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "kioskName": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "kioskMode": {
+          "type": "string",
+          "enum": ["GAME_AND_PHOTO", "PHOTO_ONLY"],
+          "maxLength": 32
+        },
+        "brandName": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "primaryColor": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "secondaryColor": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "shotsCount": {
+          "type": "number"
+        },
+        "orientation": {
+          "type": "string",
+          "enum": ["PORTRAIT", "LANDSCAPE"],
+          "maxLength": 20
+        },
+        "printLayout": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "printFrameLayer": {
+          "type": "string",
+          "enum": ["FRONT", "BACK"],
+          "maxLength": 10
+        },
+        "framesUrls": {
+          "type": "array"
+        },
+        "sponsorsUrls": {
+          "type": "array"
+        },
+        "showHandSkeleton": {
+          "type": "boolean"
+        },
+        "idleResetSeconds": {
+          "type": "number"
+        },
+        "enableHardwarePrint": {
+          "type": "boolean"
+        },
+        "photoPrintBackgroundColor": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "shareScreenBackgroundColor": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "photoPreviewContainerColor": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "shareScreenBackgroundUrl": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "sponsorLogoUrl": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "showSponsorLogo": {
+          "type": "boolean"
+        },
+        "customStartButtonUrl": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerUid",
+        "kioskName",
+        "kioskMode",
+        "brandName",
+        "primaryColor",
+        "secondaryColor",
+        "shotsCount",
+        "orientation",
+        "printLayout",
+        "printFrameLayer",
+        "showHandSkeleton",
+        "idleResetSeconds",
+        "enableHardwarePrint",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "LeaderboardScore": {
+      "title": "LeaderboardScore",
+      "description": "Player high score record scoped to a kiosk profile",
+      "type": "object",
+      "properties": {
+        "kioskId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "playerName": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "score": {
+          "type": "number"
+        },
+        "level": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["kioskId", "ownerUid", "playerName", "score", "level", "createdAt"]
+    },
+    "SharedPhoto": {
+      "title": "SharedPhoto",
+      "description": "Publicly scannable QR photo share record without PII",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "kioskId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "imageUrl": {
+          "type": "string",
+          "maxLength": 800000
+        },
+        "provider": {
+          "type": "string",
+          "enum": ["imgbb", "backup_key", "freeimage", "cloud_fallback"],
+          "maxLength": 32
+        },
+        "brandName": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["ownerUid", "kioskId", "imageUrl", "provider", "brandName", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "System admin UID documents"
+    },
+    "/kiosk_configs/{kioskId}": {
+      "schema": { "$ref": "#/entities/KioskConfig" },
+      "description": "Shared kiosk configuration profiles for multi-booth sync"
+    },
+    "/kiosk_configs/{kioskId}/scores/{scoreId}": {
+      "schema": { "$ref": "#/entities/LeaderboardScore" },
+      "description": "Cloud-synced leaderboard scores for a kiosk profile"
+    },
+    "/shared_photos/{photoId}": {
+      "schema": { "$ref": "#/entities/SharedPhoto" },
+      "description": "Uploaded photo links and fallback QR share targets"
+    }
+  }
+}
