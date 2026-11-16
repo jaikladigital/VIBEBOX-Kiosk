@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from "react";
 import { SettingsProvider, useSettings } from "./config";
 import { CameraProvider, useCamera } from "./contexts/CameraContext";
 import {
@@ -24,7 +24,6 @@ import { GameState, LeaderboardEntry } from "./types";
 import { CameraBackground } from "./components/CameraBackground";
 import { FallingGame } from "./components/FallingGame";
 import { TouchlessButton } from "./components/TouchlessButton";
-import { AdminPanel } from "./components/AdminPanel";
 import { HandTracker } from "./components/HandTracker";
 import { motion, AnimatePresence } from "motion/react";
 import QRCode from "react-qr-code";
@@ -39,7 +38,13 @@ import {
   clearCloudLeaderboard,
   fetchSharedPhotoFromCloud,
 } from "./services/cloudService";
+import { generatePhotoPrint } from "./utils/imageProcess";
+import { playSound } from "./utils/audio";
 import { User } from "firebase/auth";
+
+const AdminPanel = lazy(() =>
+  import("./components/AdminPanel").then((m) => ({ default: m.AdminPanel })),
+);
 
 const initialLeaderboard: LeaderboardEntry[] = [
   { id: "1", name: "JAIKLA", score: 1250 },
@@ -302,7 +307,6 @@ function MainGame() {
       setGameState("PROCESSING_PHOTOS");
       setUploadStatusText("กำลังจัดวางองค์ประกอบภาพและกรอบรูป...");
 
-      const { generatePhotoPrint } = await import("./utils/imageProcess");
       const isPhotoOnly = settings.kioskMode === "PHOTO_ONLY";
 
       const printData = await generatePhotoPrint(
@@ -352,10 +356,18 @@ function MainGame() {
   const renderScreen = () => {
     if (gameState === "ADMIN") {
       return (
-        <AdminPanel
-          onClose={() => setGameState("START")}
-          onClearLeaderboard={handleClearLeaderboard}
-        />
+        <Suspense
+          fallback={
+            <div className="absolute inset-0 z-[100] bg-slate-950 flex items-center justify-center text-slate-300 text-sm font-mono">
+              Loading Admin Panel...
+            </div>
+          }
+        >
+          <AdminPanel
+            onClose={() => setGameState("START")}
+            onClearLeaderboard={handleClearLeaderboard}
+          />
+        </Suspense>
       );
     }
 
@@ -1128,9 +1140,7 @@ function PhotoBooth({
       const timer = setTimeout(() => {
         setCountdown((c) => c - 1);
         if (countdown - 1 > 0) {
-          import("./utils/audio").then((m) =>
-            m.playSound("click", settings.isMuted),
-          );
+          playSound("click", settings.isMuted);
         }
       }, 1000);
       return () => clearTimeout(timer);
@@ -1150,9 +1160,7 @@ function PhotoBooth({
         }
       }
 
-      import("./utils/audio").then((m) =>
-        m.playSound("shutter", settings.isMuted),
-      );
+      playSound("shutter", settings.isMuted);
 
       setCapturedPhotos((prev) => [...prev, dataUrl]);
       setShots((prev) => prev + 1);
